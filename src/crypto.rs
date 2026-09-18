@@ -10,6 +10,8 @@ fn salt_from_nickname(nickname: &str) -> [u8; 16] {
     let norm = nickname.trim().nfkc().collect::<String>();
 
     let mut h = Sha256::new();
+    h.update(b"/salt/");
+    h.update(b"password-manager");
     h.update(norm.as_bytes());
 
     let mut salt = [0u8; 16];
