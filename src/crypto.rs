@@ -2,9 +2,25 @@ use argon2::{Algorithm, Argon2, Params, Version};
 use core::result;
 use hkdf::{Hkdf, InvalidLength};
 use sha2::{Digest, Sha256};
+use thiserror::Error;
 use unicode_normalization::UnicodeNormalization;
 use x25519_dalek::{PublicKey, StaticSecret};
 use zeroize::Zeroizing;
+
+/// Anything that can go wrong while deriving keys.
+#[derive(Debug, Error)]
+pub enum CryptoError {
+    /// Argon2 parameters were out of range,
+    /// or hashing could not allocate bytes of memory.
+    #[error("argon2 key derivation failed: {0}")]
+    Argon2(#[from] argon2::Error),
+
+    /// Requested more HKDF output than `255 * 32` bytes.
+    #[error("hkdf expand failed: {0}")]
+    Hkdf(#[from] InvalidLength),
+}
+
+pub type Result<T> = result::Result<T, CryptoError>;
 
 fn salt_from_nickname(nickname: &str) -> [u8; 16] {
     let norm = nickname.trim().nfkc().collect::<String>();
