@@ -171,6 +171,7 @@ dependencies = [
  "sha2",
  "unicode-normalization",
  "x25519-dalek",
+ "zeroize",
 ]
 
 [[package]]
