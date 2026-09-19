@@ -148,3 +148,7 @@ pub(crate) fn decrypt(nickname: &str, password: &str, sealed: &[u8]) -> Result<V
     let secret = identity_key(&seed)?;
     open(&secret, sealed)
 }
+
+#[cfg(test)]
+#[path = "crypto_tests.rs"]
+mod tests;
