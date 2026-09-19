@@ -17,7 +17,7 @@ pub(crate) const TAG_LEN: usize = 16;
 pub type Result<T> = result::Result<T, CryptoError>;
 
 fn salt_from_nickname(nickname: &str) -> [u8; 16] {
-    let norm = nickname.trim().nfkc().collect::<String>();
+    let norm = nickname.nfkc().collect::<String>();
 
     let mut h = Sha256::new();
     h.update(b"/salt/");
