@@ -28,4 +28,11 @@ impl DbManager {
             })
             .collect()
     }
+
+    pub fn retrieve_password(&self, key: &str) -> Result<Option<Vec<u8>>, redb::Error> {
+        let read_txn = self.db.begin_read()?;
+        let table = read_txn.open_table(TABLE)?;
+
+        Ok(table.get(key)?.map(|guard| guard.value().to_vec()))
+    }
 }
