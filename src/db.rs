@@ -36,7 +36,7 @@ impl DbManager {
         Ok(table.get(key)?.map(|guard| guard.value().to_vec()))
     }
 
-    pub fn insert(&mut self, key: &str, value: &[u8]) -> Result<(), redb::Error> {
+    pub fn store(&mut self, key: &str, value: &[u8]) -> Result<(), redb::Error> {
         let write_txn = self.db.begin_write()?;
 
         {
