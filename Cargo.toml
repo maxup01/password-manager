@@ -14,3 +14,4 @@ thiserror = { version = "2.0.0" }
 chacha20poly1305 = { version = "0.11.0" }
 redb = { version = "4.3.0" }
 ratatui = { version = "0.30.0" }
+dirs = { version = "7.0.0" }

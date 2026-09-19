@@ -48,4 +48,17 @@ impl DbManager {
 
         Ok(())
     }
+
+    pub fn delete(&self, key: &str) -> Result<bool, redb::Error> {
+        let write_txn = self.db.begin_write()?;
+
+        let existed = {
+            let mut table = write_txn.open_table(TABLE)?;
+            table.remove(key)?.is_some()
+        };
+
+        write_txn.commit()?;
+
+        Ok(existed)
+    }
 }
