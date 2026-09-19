@@ -255,3 +255,99 @@ fn message_keys_avalanche() {
         "{unchanged} of 56 bytes unchanged after a one-bit change"
     );
 }
+
+// --- seal ---
+
+/// The identity element: order 1, so `r · P` is all-zero for every `r`.
+const SMALL_ORDER_POINT: [u8; 32] = [0u8; 32];
+
+#[test]
+fn sealed_message_has_key_and_tag_overhead() {
+    let recipient = public_key(1);
+
+    for len in [0, 1, 16, 32, 1000] {
+        let sealed = seal(&recipient, &vec![0xab; len]).unwrap();
+
+        assert_eq!(
+            sealed.len(),
+            EPHEMERAL_PUBLIC_KEY_LEN + len + TAG_LEN,
+            "wrong length for a {len}-byte plaintext"
+        );
+    }
+}
+
+#[test]
+fn sealing_the_same_plaintext_twice_gives_different_messages() {
+    let recipient = public_key(1);
+
+    let first = seal(&recipient, b"same plaintext").unwrap();
+    let second = seal(&recipient, b"same plaintext").unwrap();
+
+    assert_ne!(first, second);
+    assert_ne!(
+        first[..EPHEMERAL_PUBLIC_KEY_LEN],
+        second[..EPHEMERAL_PUBLIC_KEY_LEN],
+        "ephemeral key was reused"
+    );
+}
+
+#[test]
+fn sealed_message_does_not_contain_the_plaintext() {
+    let recipient = public_key(1);
+    let plaintext = b"correct horse battery staple";
+
+    let sealed = seal(&recipient, plaintext).unwrap();
+    let body = &sealed[EPHEMERAL_PUBLIC_KEY_LEN..sealed.len() - TAG_LEN];
+
+    assert_ne!(body, plaintext);
+    assert!(
+        !sealed.windows(plaintext.len()).any(|w| w == plaintext),
+        "plaintext appears verbatim in the sealed message"
+    );
+}
+
+#[test]
+fn sealed_message_starts_with_an_ephemeral_key_not_the_recipient() {
+    let recipient = public_key(1);
+    let sealed = seal(&recipient, b"entry").unwrap();
+
+    assert_ne!(
+        &sealed[..EPHEMERAL_PUBLIC_KEY_LEN],
+        recipient.as_bytes(),
+        "prefix must be the ephemeral key, not the recipient"
+    );
+}
+
+#[test]
+fn seal_rejects_a_small_order_recipient() {
+    let weak = PublicKey::from(SMALL_ORDER_POINT);
+
+    assert!(matches!(
+        seal(&weak, b"entry"),
+        Err(CryptoError::WeakPublicKey)
+    ));
+}
+
+#[test]
+fn sealed_message_round_trips() {
+    let secret = identity_key(&seed(NICKNAME, PASSWORD).unwrap()).unwrap();
+    let recipient = PublicKey::from(&secret);
+
+    for plaintext in [b"".as_slice(), b"x", b"a longer vault entry"] {
+        let sealed = seal(&recipient, plaintext).unwrap();
+
+        assert_eq!(open(&secret, &sealed).unwrap(), plaintext);
+    }
+}
+
+#[test]
+fn seal_needs_no_secret_but_only_the_holder_can_open() {
+    let secret = StaticSecret::from([5u8; 32]);
+    let sealed = seal(&PublicKey::from(&secret), b"entry").unwrap();
+
+    assert_eq!(open(&secret, &sealed).unwrap(), b"entry");
+    assert!(matches!(
+        open(&StaticSecret::from([6u8; 32]), &sealed),
+        Err(CryptoError::Aead)
+    ));
+}
