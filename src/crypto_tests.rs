@@ -462,3 +462,105 @@ fn open_returns_the_exact_bytes_that_were_sealed() {
         assert_eq!(open(&secret, &sealed).unwrap(), plaintext);
     }
 }
+
+// --- encrypt / decrypt ---
+
+#[test]
+fn encrypt_decrypt_round_trips() {
+    let payloads: [&[u8]; 3] = [b"", b"hunter2", b"a much longer vault entry"];
+
+    for plaintext in payloads {
+        let (sealed, _) = encrypt(NICKNAME, PASSWORD, plaintext).unwrap();
+
+        assert_eq!(decrypt(NICKNAME, PASSWORD, &sealed).unwrap(), plaintext);
+    }
+}
+
+#[test]
+fn decrypt_rejects_the_wrong_password() {
+    let (sealed, _) = encrypt(NICKNAME, PASSWORD, b"hunter2").unwrap();
+
+    assert!(matches!(
+        decrypt(NICKNAME, "not the password", &sealed),
+        Err(CryptoError::Aead)
+    ));
+}
+
+#[test]
+fn decrypt_rejects_the_wrong_nickname() {
+    let (sealed, _) = encrypt(NICKNAME, PASSWORD, b"hunter2").unwrap();
+
+    assert!(matches!(
+        decrypt("someone-else", PASSWORD, &sealed),
+        Err(CryptoError::Aead)
+    ));
+}
+
+#[test]
+fn decrypt_rejects_a_near_miss_password() {
+    let (sealed, _) = encrypt(NICKNAME, "hunter2", b"entry").unwrap();
+
+    for wrong in ["hunter3", "hunter2 ", "Hunter2", "hunter"] {
+        assert!(
+            matches!(decrypt(NICKNAME, wrong, &sealed), Err(CryptoError::Aead)),
+            "{wrong:?} should not open a vault sealed with \"hunter2\""
+        );
+    }
+}
+
+#[test]
+fn encrypt_returns_the_identity_public_key() {
+    let (_, returned) = encrypt(NICKNAME, PASSWORD, b"entry").unwrap();
+    let expected = public_of(&seed(NICKNAME, PASSWORD).unwrap());
+
+    assert_eq!(returned.to_bytes(), expected);
+}
+
+#[test]
+fn encrypt_is_randomized_but_the_identity_is_not() {
+    let (first, first_key) = encrypt(NICKNAME, PASSWORD, b"entry").unwrap();
+    let (second, second_key) = encrypt(NICKNAME, PASSWORD, b"entry").unwrap();
+
+    assert_eq!(first_key.to_bytes(), second_key.to_bytes());
+    assert_ne!(first, second);
+}
+
+#[test]
+fn entries_can_be_added_without_the_password() {
+    let (_, public_key) = encrypt(NICKNAME, PASSWORD, b"first entry").unwrap();
+
+    let added = seal(&public_key, b"added while locked").unwrap();
+
+    assert_eq!(
+        decrypt(NICKNAME, PASSWORD, &added).unwrap(),
+        b"added while locked"
+    );
+}
+
+#[test]
+fn decrypt_rejects_malformed_input() {
+    for len in [0, 31, 47] {
+        assert!(
+            matches!(
+                decrypt(NICKNAME, PASSWORD, &vec![1u8; len]),
+                Err(CryptoError::Malformed)
+            ),
+            "expected Malformed for a {len}-byte message"
+        );
+    }
+}
+
+#[test]
+fn decrypt_rejects_a_tampered_vault_entry() {
+    let (sealed, _) = encrypt(NICKNAME, PASSWORD, b"hunter2").unwrap();
+
+    for index in [0, EPHEMERAL_PUBLIC_KEY_LEN, sealed.len() - 1] {
+        let mut corrupted = sealed.clone();
+        corrupted[index] ^= 1;
+
+        assert!(
+            decrypt(NICKNAME, PASSWORD, &corrupted).is_err(),
+            "corruption at byte {index} went undetected"
+        );
+    }
+}
