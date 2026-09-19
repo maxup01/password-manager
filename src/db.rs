@@ -35,4 +35,17 @@ impl DbManager {
 
         Ok(table.get(key)?.map(|guard| guard.value().to_vec()))
     }
+
+    pub fn insert(&mut self, key: &str, value: &[u8]) -> Result<(), redb::Error> {
+        let write_txn = self.db.begin_write()?;
+
+        {
+            let mut table = write_txn.open_table(TABLE)?;
+            table.insert(key, value)?;
+        }
+
+        write_txn.commit()?;
+
+        Ok(())
+    }
 }
