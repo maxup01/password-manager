@@ -131,7 +131,7 @@ pub(crate) fn open(secret: &StaticSecret, encryption: &[u8]) -> Result<Vec<u8>> 
         .map_err(|_| CryptoError::Aead)
 }
 
-fn encrypt(nickname: &str, password: &str, data: &[u8]) -> Result<(Vec<u8>, PublicKey)> {
+pub(crate) fn encrypt(nickname: &str, password: &str, data: &[u8]) -> Result<(Vec<u8>, PublicKey)> {
     let seed = seed(nickname, password)?;
 
     let secret = identity_key(&seed)?;
