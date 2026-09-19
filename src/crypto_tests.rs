@@ -162,3 +162,96 @@ fn different_credentials_give_different_identities() {
     assert_ne!(mine, other_nickname);
     assert_ne!(other_password, other_nickname);
 }
+
+// --- message_keys ---
+
+fn public_key(byte: u8) -> PublicKey {
+    PublicKey::from(&StaticSecret::from([byte; 32]))
+}
+
+fn derived(shared: &[u8; 32], epk: &PublicKey, recipient: &PublicKey) -> [u8; 56] {
+    let (key, nonce) = message_keys(shared, epk, recipient).unwrap();
+
+    let mut all = [0u8; 56];
+    all[..32].copy_from_slice(&*key);
+    all[32..].copy_from_slice(&nonce);
+    all
+}
+
+#[test]
+fn message_keys_are_deterministic() {
+    let (epk, recipient) = (public_key(1), public_key(2));
+
+    assert_eq!(
+        derived(&[9u8; 32], &epk, &recipient),
+        derived(&[9u8; 32], &epk, &recipient)
+    );
+}
+
+#[test]
+fn message_keys_depend_on_the_shared_secret() {
+    let (epk, recipient) = (public_key(1), public_key(2));
+
+    assert_ne!(
+        derived(&[9u8; 32], &epk, &recipient),
+        derived(&[10u8; 32], &epk, &recipient)
+    );
+}
+
+#[test]
+fn message_keys_are_bound_to_both_public_keys() {
+    let shared = [9u8; 32];
+    let baseline = derived(&shared, &public_key(1), &public_key(2));
+
+    assert_ne!(
+        baseline,
+        derived(&shared, &public_key(3), &public_key(2)),
+        "swapping the ephemeral key must change the derived key"
+    );
+    assert_ne!(
+        baseline,
+        derived(&shared, &public_key(1), &public_key(3)),
+        "swapping the recipient must change the derived key"
+    );
+}
+
+#[test]
+fn message_keys_are_order_sensitive() {
+    let shared = [9u8; 32];
+    let (a, b) = (public_key(1), public_key(2));
+
+    assert_ne!(derived(&shared, &a, &b), derived(&shared, &b, &a));
+}
+
+#[test]
+fn key_and_nonce_are_different_slices_of_the_output() {
+    let (key, nonce) = message_keys(&[9u8; 32], &public_key(1), &public_key(2)).unwrap();
+
+    assert_ne!(&key[..24], &nonce[..], "nonce must not repeat key bytes");
+}
+
+#[test]
+fn key_is_not_the_raw_shared_secret() {
+    let shared = [9u8; 32];
+    let (key, _) = message_keys(&shared, &public_key(1), &public_key(2)).unwrap();
+
+    assert_ne!(*key, shared);
+}
+
+#[test]
+fn message_keys_avalanche() {
+    let (epk, recipient) = (public_key(1), public_key(2));
+
+    let mut shared = [9u8; 32];
+    let before = derived(&shared, &epk, &recipient);
+
+    shared[0] ^= 1;
+    let after = derived(&shared, &epk, &recipient);
+
+    let unchanged = before.iter().zip(&after).filter(|(a, b)| a == b).count();
+
+    assert!(
+        unchanged < 14,
+        "{unchanged} of 56 bytes unchanged after a one-bit change"
+    );
+}
