@@ -109,18 +109,16 @@ fn message_keys(
 }
 
 /// Encrypt `data` to `recipient`. Needs no secret — only the public key.
-pub(crate) fn seal(
-    recipient: &PublicKey,
-    ephemeral: EphemeralSecret,
-    ephemeral_public_key: &PublicKey,
-    data: &[u8],
-) -> Result<Vec<u8>> {
+pub(crate) fn seal(recipient: &PublicKey, data: &[u8]) -> Result<Vec<u8>> {
+    let ephemeral = EphemeralSecret::random();
+    let ephemeral_public_key = PublicKey::from(&ephemeral);
+
     let shared = ephemeral.diffie_hellman(recipient);
     if !shared.was_contributory() {
         return Err(CryptoError::WeakPublicKey);
     }
 
-    let (key, nonce) = message_keys(shared.as_bytes(), ephemeral_public_key, recipient)?;
+    let (key, nonce) = message_keys(shared.as_bytes(), &ephemeral_public_key, recipient)?;
     let cipher = XChaCha20Poly1305::new_from_slice(&*key).map_err(|_| CryptoError::Aead)?;
     let ct = cipher
         .encrypt(&nonce.into(), data)
@@ -166,10 +164,7 @@ fn encrypt(nickname: &str, password: &str, data: &[u8]) -> Result<(Vec<u8>, Publ
 
     let public_key = PublicKey::from(&secret);
 
-    let ephemeral = EphemeralSecret::random();
-    let epk = PublicKey::from(&ephemeral);
-
-    let encrypted_data = seal(&public_key, ephemeral, &epk, data)?;
+    let encrypted_data = seal(&public_key, data)?;
 
     Ok((encrypted_data, public_key))
 }
