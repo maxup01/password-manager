@@ -32,7 +32,7 @@ fn salt_from_nickname(nickname: &str) -> [u8; 16] {
 fn seed(nickname: &str, password: &str) -> argon2::Result<Zeroizing<[u8; 32]>> {
     let salt = salt_from_nickname(nickname);
 
-    let params = Params::new(46 * 1024 * 1024, 1, 1, None)?;
+    let params = Params::new(46 * 1024, 1, 1, None)?;
 
     let argon = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
 
