@@ -9,10 +9,10 @@ use x25519_dalek::{EphemeralSecret, PublicKey, StaticSecret};
 use zeroize::Zeroizing;
 
 /// Length of the ephemeral public key prefixed to every sealed message.
-const EPHEMERAL_PUBLIC_KEY_LEN: usize = 32;
+pub(crate) const EPHEMERAL_PUBLIC_KEY_LEN: usize = 32;
 
 /// Poly1305 authentication tag.
-const TAG_LEN: usize = 16;
+pub(crate) const TAG_LEN: usize = 16;
 
 pub type Result<T> = result::Result<T, CryptoError>;
 

@@ -1,7 +1,8 @@
 use super::*;
-use crate::crypto::{open, seal};
+use crate::crypto::{EPHEMERAL_PUBLIC_KEY_LEN, TAG_LEN, open, seal};
 use argon2::Params;
-use hkdf::{Hkdf, InvalidLength};
+use hkdf::Hkdf;
+use sha2::Sha256;
 use x25519_dalek::{PublicKey, StaticSecret};
 
 /// A deterministic identity built without running Argon2.
