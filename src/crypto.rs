@@ -1,9 +1,9 @@
+use crate::crypto_error::CryptoError;
 use argon2::{Algorithm, Argon2, Params, Version};
 use chacha20poly1305::{KeyInit, XChaCha20Poly1305, aead::Aead};
 use core::result;
 use hkdf::{Hkdf, InvalidLength};
 use sha2::{Digest, Sha256};
-use thiserror::Error;
 use unicode_normalization::UnicodeNormalization;
 use x25519_dalek::{EphemeralSecret, PublicKey, StaticSecret};
 use zeroize::Zeroizing;
@@ -13,31 +13,6 @@ const EPHEMERAL_PUBLIC_KEY_LEN: usize = 32;
 
 /// Poly1305 authentication tag.
 const TAG_LEN: usize = 16;
-
-/// Anything that can go wrong while deriving keys.
-#[derive(Debug, Error)]
-pub enum CryptoError {
-    /// Argon2 parameters were out of range,
-    /// or hashing could not allocate bytes of memory.
-    #[error("argon2 key derivation failed: {0}")]
-    Argon2(#[from] argon2::Error),
-
-    /// Requested more HKDF output than `255 * 32` bytes.
-    #[error("hkdf expand failed: {0}")]
-    Hkdf(#[from] InvalidLength),
-
-    /// AEAD refused the key, or the ciphertext failed authentication.
-    #[error("message could not be encrypted or decrypted")]
-    Aead,
-
-    /// Sealed message too short to contain an ephemeral key and a tag.
-    #[error("sealed message is malformed")]
-    Malformed,
-
-    /// Peer public key had small order — shared secret would be all-zero.
-    #[error("peer public key is not contributory")]
-    WeakPublicKey,
-}
 
 pub type Result<T> = result::Result<T, CryptoError>;
 
@@ -173,7 +148,3 @@ pub(crate) fn decrypt(nickname: &str, password: &str, sealed: &[u8]) -> Result<V
     let secret = identity_key(&seed)?;
     open(&secret, sealed)
 }
-
-#[cfg(test)]
-#[path = "crypto_tests.rs"]
-mod tests;

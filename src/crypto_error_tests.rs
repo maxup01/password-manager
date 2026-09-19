@@ -1,4 +1,8 @@
 use super::*;
+use crate::crypto::{open, seal};
+use argon2::Params;
+use hkdf::{Hkdf, InvalidLength};
+use x25519_dalek::{PublicKey, StaticSecret};
 
 /// A deterministic identity built without running Argon2.
 fn test_secret() -> StaticSecret {
