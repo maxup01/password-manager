@@ -100,3 +100,65 @@ fn seed_accepts_empty_inputs() {
 
     assert_ne!(*empty_password, *empty_nickname);
 }
+
+// --- identity_key ---
+
+fn public_of(seed: &[u8; 32]) -> [u8; 32] {
+    PublicKey::from(&identity_key(seed).unwrap()).to_bytes()
+}
+
+#[test]
+fn identity_key_is_deterministic() {
+    let seed = [42u8; 32];
+
+    assert_eq!(public_of(&seed), public_of(&seed));
+}
+
+#[test]
+fn identity_key_depends_on_the_seed() {
+    assert_ne!(public_of(&[1u8; 32]), public_of(&[2u8; 32]));
+}
+
+#[test]
+fn identity_key_is_not_the_raw_seed() {
+    let seed = [42u8; 32];
+    let secret = identity_key(&seed).unwrap();
+
+    assert_ne!(secret.to_bytes(), seed);
+}
+
+#[test]
+fn identity_key_avalanches() {
+    let mut seed = [42u8; 32];
+    let before = identity_key(&seed).unwrap().to_bytes();
+
+    seed[0] ^= 1;
+    let after = identity_key(&seed).unwrap().to_bytes();
+
+    let shared_bytes = before.iter().zip(&after).filter(|(a, b)| a == b).count();
+
+    assert_ne!(before, after);
+    assert!(
+        shared_bytes < 8,
+        "{shared_bytes} of 32 bytes unchanged after a one-bit seed change"
+    );
+}
+
+#[test]
+fn same_credentials_reproduce_the_same_identity() {
+    let first = public_of(&seed(NICKNAME, PASSWORD).unwrap());
+    let second = public_of(&seed(NICKNAME, PASSWORD).unwrap());
+
+    assert_eq!(first, second);
+}
+
+#[test]
+fn different_credentials_give_different_identities() {
+    let mine = public_of(&seed(NICKNAME, PASSWORD).unwrap());
+    let other_password = public_of(&seed(NICKNAME, "another password").unwrap());
+    let other_nickname = public_of(&seed("someone-else", PASSWORD).unwrap());
+
+    assert_ne!(mine, other_password);
+    assert_ne!(mine, other_nickname);
+    assert_ne!(other_password, other_nickname);
+}
