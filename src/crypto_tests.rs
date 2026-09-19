@@ -38,3 +38,65 @@ fn different_nicknames_give_different_salts() {
         }
     }
 }
+
+// --- seed ---
+
+const NICKNAME: &str = "maks";
+const PASSWORD: &str = "correct horse battery staple";
+
+#[test]
+fn seed_is_deterministic() {
+    let first = seed(NICKNAME, PASSWORD).unwrap();
+    let second = seed(NICKNAME, PASSWORD).unwrap();
+
+    assert_eq!(*first, *second);
+}
+
+#[test]
+fn seed_depends_on_the_password() {
+    let a = seed(NICKNAME, PASSWORD).unwrap();
+    let b = seed(NICKNAME, "a different password").unwrap();
+
+    assert_ne!(*a, *b);
+}
+
+#[test]
+fn seed_depends_on_the_nickname() {
+    let a = seed(NICKNAME, PASSWORD).unwrap();
+    let b = seed("someone-else", PASSWORD).unwrap();
+
+    assert_ne!(*a, *b);
+}
+
+#[test]
+fn seed_treats_the_password_literally() {
+    let plain = seed(NICKNAME, "hunter2").unwrap();
+
+    for variant in ["hunter2 ", " hunter2", "Hunter2", "hunter2\n"] {
+        let other = seed(NICKNAME, variant).unwrap();
+        assert_ne!(*plain, *other, "{variant:?} must not collide with hunter2");
+    }
+}
+
+#[test]
+fn seed_is_case_sensitive_in_the_nickname() {
+    let lower = seed("maks", PASSWORD).unwrap();
+    let upper = seed("Maks", PASSWORD).unwrap();
+
+    assert_ne!(*lower, *upper);
+}
+
+#[test]
+fn seed_fills_the_whole_buffer() {
+    let derived = seed(NICKNAME, PASSWORD).unwrap();
+
+    assert_ne!(*derived, [0u8; 32], "seed was left uninitialized");
+}
+
+#[test]
+fn seed_accepts_empty_inputs() {
+    let empty_password = seed(NICKNAME, "").unwrap();
+    let empty_nickname = seed("", PASSWORD).unwrap();
+
+    assert_ne!(*empty_password, *empty_nickname);
+}
