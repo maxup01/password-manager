@@ -351,3 +351,114 @@ fn seal_needs_no_secret_but_only_the_holder_can_open() {
         Err(CryptoError::Aead)
     ));
 }
+
+// --- open ---
+
+fn sealed_for(secret: &StaticSecret, plaintext: &[u8]) -> Vec<u8> {
+    seal(&PublicKey::from(secret), plaintext).unwrap()
+}
+
+#[test]
+fn open_rejects_messages_too_short_to_frame() {
+    let secret = StaticSecret::from([5u8; 32]);
+
+    for len in [0, 1, 31, 32, 33, 47] {
+        assert!(
+            matches!(open(&secret, &vec![1u8; len]), Err(CryptoError::Malformed)),
+            "expected Malformed for a {len}-byte message"
+        );
+    }
+}
+
+#[test]
+fn open_treats_minimum_length_as_well_formed() {
+    let secret = StaticSecret::from([5u8; 32]);
+    let msg = vec![1u8; EPHEMERAL_PUBLIC_KEY_LEN + TAG_LEN];
+
+    assert!(!matches!(open(&secret, &msg), Err(CryptoError::Malformed)));
+}
+
+#[test]
+fn open_rejects_a_small_order_ephemeral_key() {
+    let secret = StaticSecret::from([5u8; 32]);
+
+    let mut msg = vec![1u8; EPHEMERAL_PUBLIC_KEY_LEN + TAG_LEN];
+    msg[..EPHEMERAL_PUBLIC_KEY_LEN].copy_from_slice(&SMALL_ORDER_POINT);
+
+    assert!(matches!(
+        open(&secret, &msg),
+        Err(CryptoError::WeakPublicKey)
+    ));
+}
+
+#[test]
+fn open_detects_every_single_bit_flip() {
+    let secret = StaticSecret::from([5u8; 32]);
+    let sealed = sealed_for(&secret, b"entry");
+
+    for byte in 0..sealed.len() {
+        for bit in 0..8 {
+            let mut corrupted = sealed.clone();
+            corrupted[byte] ^= 1 << bit;
+
+            assert!(
+                open(&secret, &corrupted).is_err(),
+                "flipping bit {bit} of byte {byte} went undetected"
+            );
+        }
+    }
+}
+
+#[test]
+fn open_rejects_length_changes() {
+    let secret = StaticSecret::from([5u8; 32]);
+    let sealed = sealed_for(&secret, b"a longer vault entry");
+
+    let truncated = &sealed[..sealed.len() - 1];
+    assert!(matches!(open(&secret, truncated), Err(CryptoError::Aead)));
+
+    let mut extended = sealed.clone();
+    extended.push(0);
+    assert!(matches!(open(&secret, &extended), Err(CryptoError::Aead)));
+}
+
+#[test]
+fn open_rejects_a_substituted_ephemeral_key() {
+    let secret = StaticSecret::from([5u8; 32]);
+    let mut sealed = sealed_for(&secret, b"entry");
+
+    // A valid public key, just not the one this message was sealed with.
+    let other = PublicKey::from(&StaticSecret::from([3u8; 32]));
+    sealed[..EPHEMERAL_PUBLIC_KEY_LEN].copy_from_slice(other.as_bytes());
+
+    assert!(matches!(open(&secret, &sealed), Err(CryptoError::Aead)));
+}
+
+#[test]
+fn open_rejects_a_message_sealed_to_someone_else() {
+    let mine = StaticSecret::from([5u8; 32]);
+    let theirs = StaticSecret::from([6u8; 32]);
+
+    let for_them = sealed_for(&theirs, b"entry");
+
+    assert!(matches!(open(&mine, &for_them), Err(CryptoError::Aead)));
+    assert_eq!(open(&theirs, &for_them).unwrap(), b"entry");
+}
+
+#[test]
+fn open_returns_the_exact_bytes_that_were_sealed() {
+    let secret = StaticSecret::from([5u8; 32]);
+
+    let payloads: [&[u8]; 4] = [
+        b"",
+        b"\x00\x00\x00",
+        b"line\nbreak\ttab\0nul",
+        &[0xff; 4096],
+    ];
+
+    for plaintext in payloads {
+        let sealed = sealed_for(&secret, plaintext);
+
+        assert_eq!(open(&secret, &sealed).unwrap(), plaintext);
+    }
+}
