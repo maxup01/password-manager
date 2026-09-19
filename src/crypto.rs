@@ -11,6 +11,9 @@ use zeroize::Zeroizing;
 /// Length of the ephemeral public key prefixed to every sealed message.
 const EPHEMERAL_PUBLIC_KEY_LEN: usize = 32;
 
+/// Poly1305 authentication tag.
+const TAG_LEN: usize = 16;
+
 /// Anything that can go wrong while deriving keys.
 #[derive(Debug, Error)]
 pub enum CryptoError {
@@ -129,6 +132,33 @@ pub(crate) fn seal(
     Ok(out)
 }
 
+/// Decrypt a message produced by [`seal`].
+pub(crate) fn open(secret: &StaticSecret, encryption: &[u8]) -> Result<Vec<u8>> {
+    if encryption.len() < EPHEMERAL_PUBLIC_KEY_LEN + TAG_LEN {
+        return Err(CryptoError::Malformed);
+    }
+    let (epk_bytes, ct) = encryption.split_at(EPHEMERAL_PUBLIC_KEY_LEN);
+
+    let mut raw = [0u8; 32];
+    raw.copy_from_slice(epk_bytes);
+
+    let epk = PublicKey::from(raw);
+
+    let recipient = PublicKey::from(secret);
+
+    let shared = secret.diffie_hellman(&epk);
+    if !shared.was_contributory() {
+        return Err(CryptoError::WeakPublicKey);
+    }
+
+    let (key, nonce) = message_keys(shared.as_bytes(), &epk, &recipient)?;
+
+    let cipher = XChaCha20Poly1305::new_from_slice(&*key).map_err(|_| CryptoError::Aead)?;
+    cipher
+        .decrypt(&nonce.into(), ct)
+        .map_err(|_| CryptoError::Aead)
+}
+
 fn encrypt(nickname: &str, password: &str, data: &[u8]) -> Result<(Vec<u8>, PublicKey)> {
     let seed = seed(nickname, password)?;
 
@@ -142,4 +172,10 @@ fn encrypt(nickname: &str, password: &str, data: &[u8]) -> Result<(Vec<u8>, Publ
     let encrypted_data = seal(&public_key, ephemeral, &epk, data)?;
 
     Ok((encrypted_data, public_key))
+}
+
+pub(crate) fn decrypt(nickname: &str, password: &str, sealed: &[u8]) -> Result<Vec<u8>> {
+    let seed = seed(nickname, password)?;
+    let secret = identity_key(&seed)?;
+    open(&secret, sealed)
 }
