@@ -108,7 +108,6 @@ fn message_keys(
     Ok((key, nonce))
 }
 
-/// Encrypt `data` to `recipient`. Needs no secret — only the public key.
 pub(crate) fn seal(recipient: &PublicKey, data: &[u8]) -> Result<Vec<u8>> {
     let ephemeral = EphemeralSecret::random();
     let ephemeral_public_key = PublicKey::from(&ephemeral);
