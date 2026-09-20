@@ -2,7 +2,7 @@ use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
 use std::fs;
 
 const TABLE_NAME: &str = "passwords";
-const TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new(TABLE_NAME);
+const TABLE: TableDefinition<&str, (&[u8], &[u8])> = TableDefinition::new(TABLE_NAME);
 
 pub(crate) struct DbManager {
     db: Database,
@@ -37,19 +37,28 @@ impl DbManager {
             .collect()
     }
 
-    pub fn retrieve_password(&self, key: &str) -> Result<Option<Vec<u8>>, redb::Error> {
+    pub fn retrieve_credentials(
+        &self,
+        key: &str,
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, redb::Error> {
         let read_txn = self.db.begin_read()?;
         let table = read_txn.open_table(TABLE)?;
 
-        Ok(table.get(key)?.map(|guard| guard.value().to_vec()))
+        let credentials = table.get(key)?;
+
+        Ok(credentials.map(|guard| {
+            let (login, password) = guard.value();
+
+            (login.to_vec(), password.to_vec())
+        }))
     }
 
-    pub fn store(&mut self, key: &str, value: &[u8]) -> Result<(), redb::Error> {
+    pub fn store(&mut self, key: &str, login: &[u8], password: &[u8]) -> Result<(), redb::Error> {
         let write_txn = self.db.begin_write()?;
 
         {
             let mut table = write_txn.open_table(TABLE)?;
-            table.insert(key, value)?;
+            table.insert(key, (login, password))?;
         }
 
         write_txn.commit()?;
