@@ -1,4 +1,5 @@
 use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
+use std::fs;
 
 const TABLE_NAME: &str = "passwords";
 const TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new(TABLE_NAME);
@@ -9,9 +10,16 @@ pub(crate) struct DbManager {
 
 impl DbManager {
     pub fn init() -> Result<Self, redb::Error> {
-        const PASSWORD_MANAGER_DATABASE_PATH: &str = "~/password-manager";
+        const DATABASE_DIRECTORY: &str = ".password-manager";
+        const DATABASE_FILE_NAME: &str = "vault.redb";
 
-        let db = Database::create(PASSWORD_MANAGER_DATABASE_PATH)?;
+        let directory = dirs::home_dir()
+            .unwrap_or_else(std::env::temp_dir)
+            .join(DATABASE_DIRECTORY);
+
+        let _ = fs::create_dir_all(&directory);
+
+        let db = Database::create(directory.join(DATABASE_FILE_NAME))?;
 
         Ok(Self { db })
     }
