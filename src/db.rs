@@ -79,3 +79,7 @@ impl DbManager {
         Ok(existed)
     }
 }
+
+#[cfg(test)]
+#[path = "db_tests.rs"]
+mod tests;
